@@ -19,7 +19,8 @@ def test_simple(c, s):
         yield gen.sleep(0.1)
         assert time() < start + 10
 
-    assert S.acknowledged == S.submitted
+    assert not S.submitted
+    assert len(S.running) == len(s.ncores)
 
     yield gen.sleep(0.2)
     assert len(s.ncores) == 2  # still 2 after some time

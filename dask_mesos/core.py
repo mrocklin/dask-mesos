@@ -80,8 +80,10 @@ class FixedScheduler(mesos.interface.Scheduler):
         self.worker_executable = executable
         self.status_messages = deque(maxlen=10000)
         self.recent_offers = deque(maxlen=100)
+
         self.submitted = set()
-        self.acknowledged = set()
+        self.running = set()
+        self.finished = set()
 
     def registered(self, driver, framework_id, master_info):
         logger.info("Registered with framework id: {}".format(framework_id))
@@ -100,16 +102,16 @@ class FixedScheduler(mesos.interface.Scheduler):
         return r
 
     def active_workers(self):
-        return len(self.scheduler.ncores) + len(self.submitted - self.acknowledged)
+        return len(self.running) + len(self.submitted)
 
     def resourceOffers(self, driver, offers):
         self.recent_offers.extend(offers)
         logger.debug("Received offers: %s", offers)
 
         if self.active_workers() >= self.target:
-            logger.debug("Saturated.  ncores: %d, submitted %d, ack: %d",
+            logger.debug("Saturated.  ncores: %d, submitted %d, running: %d",
                     len(self.scheduler.ncores), len(self.submitted),
-                    len(self.acknowledged))
+                    len(self.running))
             return
 
 
@@ -143,7 +145,10 @@ class FixedScheduler(mesos.interface.Scheduler):
                 self.submitted.add(task.task_id.value)
                 tasks.append(task)
 
-            driver.launchTasks(offer.id, tasks)
+            if tasks:
+                driver.launchTasks(offer.id, tasks)
+            else:
+                driver.declineOffer(offer.id)
             logger.info("Launch tasks %s with offer %s",
                         [t.task_id.value for t in tasks], offer.id.value)
             logger.debug("Launching tasks %s", tasks)
@@ -191,7 +196,12 @@ class FixedScheduler(mesos.interface.Scheduler):
         logger.debug("Status update: %s", status)
 
         if status.state == 1:  # TASK_RUNNING
-            self.acknowledged.add(status.task_id.value)
+            self.submitted.remove(status.task_id.value)
+            self.running.add(status.task_id.value)
+
+        elif status.state == 2:  # TASK_FINISHED
+            self.running.remove(status.task_id.value)
+            self.finished.add(status.task_id.value)
 
         self.status_messages.append(status)
 
