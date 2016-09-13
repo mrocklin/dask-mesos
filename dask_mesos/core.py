@@ -68,6 +68,9 @@ class DaskMesosScheduler(Scheduler):
         for offer in offers:
             if (len(self.scheduler.ncores)
               + len(self.submitted - self.acknowledged)) >= self.target:
+                logger.debug("Offer unneccessary.  ncores: %d, submitted %d, ack: %d",
+                        len(self.scheduler.ncores), len(self.submitted),
+                        len(self.acknowledged))
                 continue  # ignore if satisfied
             o = self.parse_offer(offer)
             logger.info("Considering offer %s", o)
@@ -88,6 +91,8 @@ class DaskMesosScheduler(Scheduler):
                             offer.id.value)
                 self.submitted.add(task.task_id.value)
                 driver.launchTasks(offer.id, [task])
+            else:
+                logger.info("Rejected offer")
 
     def task_info(self, offer):
         task = mesos_pb2.TaskInfo()
@@ -130,4 +135,8 @@ class DaskMesosScheduler(Scheduler):
 
     def statusUpdate(self, driver, status):
         logger.debug("Status update: %s", status)
+
+        if status.state == 1:  # TASK_RUNNING
+            self.acknowledged.add(status.task_id.value)
+
         self.status_messages.append(status)

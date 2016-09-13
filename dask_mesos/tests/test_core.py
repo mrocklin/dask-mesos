@@ -18,6 +18,8 @@ def test_simple(c, s):
         yield gen.sleep(0.1)
         assert time() < start + 10
 
+    assert DM.scheduler.acknowledged == DM.scheduler.submitted
+
     yield gen.sleep(0.2)
     assert len(s.ncores) == 2  # still 2 after some time
 
