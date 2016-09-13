@@ -61,38 +61,54 @@ class DaskMesosScheduler(Scheduler):
         r['hostname'] = offer.hostname
         return r
 
+    def active_workers(self):
+        return len(self.scheduler.ncores) + len(self.submitted - self.acknowledged)
+
     def resourceOffers(self, driver, offers):
         self.recent_offers.extend(offers)
         logger.debug("Received offers: %s", offers)
 
+        if self.active_workers() >= self.target:
+            logger.debug("Saturated.  ncores: %d, submitted %d, ack: %d",
+                    len(self.scheduler.ncores), len(self.submitted),
+                    len(self.acknowledged))
+            return
+
+
         for offer in offers:
-            if (len(self.scheduler.ncores)
-              + len(self.submitted - self.acknowledged)) >= self.target:
-                logger.debug("Offer unneccessary.  ncores: %d, submitted %d, ack: %d",
-                        len(self.scheduler.ncores), len(self.submitted),
-                        len(self.acknowledged))
-                continue  # ignore if satisfied
             o = self.parse_offer(offer)
+            cpus = o.get('cpus', 0)
+            mem = o.get('mem', 0)
+            disk = o.get('disk', 0)
+
             logger.info("Considering offer %s", o)
 
-            if (o.get('cpus', 0) > self.cpus and
-                o.get('mem', 0) > self.mem and
-                o.get('disk', 0) > self.disk):
+            tasks = []
+
+            while (cpus >= self.cpus and
+                   mem >= self.mem and
+                   disk >= self.disk and
+                   self.active_workers() < self.target):
 
                 task = self.task_info(offer)
+
+                cpus -= self.cpus
+                mem -= self.mem
+                disk -= self.disk
+
                 options = {'--nthreads': self.cpus,
                            '--memory-limit': int(self.mem * 0.7)}
                 command = '%s %s ' % (self.worker_executable, self.scheduler.address)
                 command += ' '.join(' '.join(map(str, item)) for item in options.items())
 
                 task.command.value = command
-
-                logger.info("Launch task %s with offer %s", task.task_id.value,
-                            offer.id.value)
                 self.submitted.add(task.task_id.value)
-                driver.launchTasks(offer.id, [task])
-            else:
-                logger.info("Rejected offer")
+                tasks.append(task)
+
+            driver.launchTasks(offer.id, tasks)
+            logger.info("Launch tasks %s with offer %s",
+                        [t.task_id.value for t in tasks], offer.id.value)
+            logger.debug("Launching tasks %s", tasks)
 
     def task_info(self, offer):
         task = mesos_pb2.TaskInfo()
