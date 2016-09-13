@@ -8,6 +8,43 @@ Dask-Mesos
 
 A simple Mesos Scheduler to deploy Dask.distributed workers.
 
+Example
+-------
+
+Set up Tornado IOLoop in a background thread
+
+.. code-block:: python
+
+   >>> from tornado.ioloop import IOLoop
+   >>> from threading import Thread
+   >>> loop = IOLoop()
+   >>> thread = Thread(target=loop.start)
+   >>> thread.daemon = True
+   >>> thread.start()
+
+Start Dask Scheduler with that thread
+
+.. code-block:: python
+
+   >>> from distributed import Scheduler
+   >>> dask_scheduler = Scheduler(loop=loop)
+   >>> loop.add_callback(dask_scheduler.start)
+
+Start Mesos Scheduler with that scheduler
+
+.. code-block:: python
+
+   >>> from dask_mesos import FixedScheduler
+   >>> mesos_scheduler = FixedScheduler(dask_scheduler, target=10, cpus=2,
+   ...                                  mem=8192, executable='dask-worker')
+   >>> mesos_scheduler.start()
+
+Mesos launches workers that connect up to our local scheduler
+
+.. code-block:: python
+
+   >>> dask_scheduler
+   <Scheduler: 192.168.0.1, processes: 10, cores: 20>
 
 Test locally
 ------------

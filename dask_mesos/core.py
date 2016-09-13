@@ -5,7 +5,7 @@ import time
 from threading import Thread
 import uuid
 
-from mesos.interface import Scheduler
+import mesos.interface
 from mesos.native import MesosSchedulerDriver
 from mesos.interface import mesos_pb2
 
@@ -14,25 +14,62 @@ logging.basicConfig(format='%(levelname)s - %(message)s',
                     level=logging.DEBUG)
 
 
-class DaskMesosDeployment(object):
-    def __init__(self, scheduler):
-        self.scheduler = scheduler
-        self.framework = mesos_pb2.FrameworkInfo()
-        self.framework.user = ""
-        self.framework.name = "dask-scheduler"
-        self.driver = MesosSchedulerDriver(self.scheduler, self.framework,
-                "zk://localhost:2181/mesos")  # assumes running on the master
-        self._driver_thread = None
+class FixedScheduler(mesos.interface.Scheduler):
+    """ A Mesos scheduler that launches dask-worker tasks
 
-    def start(self):
-        if self._driver_thread:
-            return
-        self._driver_thread = Thread(target=self.driver.run)
-        self._driver_thread.daemon = True
-        self._driver_thread.start()
+    This Mesos Scheduler launches dask-worker tasks pointing to a local dask
+    Scheduler.
 
+    **Scheduling Policy**
 
-class DaskMesosScheduler(Scheduler):
+    This tries to hit a fixed number of workers, each with a fixed amount of
+    resources.  It greedily consumes offers until it reaches its target number
+    of workers.
+
+    Parameters
+    ----------
+    scheduler: dask.distributed.Scheduler
+    target: int
+        The number of workers this tries to launch
+    cpus: int
+        The number of threads per worker
+    mem: int
+        The number of megabytes of memory to use per worker
+    disk: int (optional)
+        The number of megabytes of disk to use per worker
+    executable: string
+        The command to run ``'dask-worker'`` on the slave
+
+    Examples
+    --------
+
+    Set up Tornado IOLoop in a background thread
+
+    >>> from tornado.ioloop import IOLoop
+    >>> from threading import Thread
+    >>> loop = IOLoop()
+    >>> thread = Thread(target=loop.start)
+    >>> thread.daemon = True
+    >>> thread.start()
+
+    Start Dask Scheduler
+
+    >>> from distributed import Scheduler
+    >>> dask_scheduler = Scheduler(loop=loop)
+    >>> loop.add_callback(dask_scheduler.start)
+
+    Start Mesos Scheduler
+
+    >>> from dask_mesos import FixedScheduler
+    >>> mesos_scheduler = FixedScheduler(dask_scheduler, target=10, cpus=2,
+    ...                                  mem=8192, executable='dask-worker')
+    >>> mesos_scheduler.start()
+
+    Wait for mesos to launch workers
+
+    >>> dask_scheduler
+    <Scheduler: 192.168.0.1, processes: 10, cores: 20>
+    """
     def __init__(self, scheduler, target=0, cpus=1, mem=4096, disk=None,
                  executable='dask-worker'):
         self.target = target
@@ -157,3 +194,17 @@ class DaskMesosScheduler(Scheduler):
             self.acknowledged.add(status.task_id.value)
 
         self.status_messages.append(status)
+
+    def start(self, framework=None, master="zk://localhost:2181/mesos"):
+        if framework is None:
+            framework = mesos_pb2.FrameworkInfo()
+            framework.user = ""
+            framework.name = "dask-scheduler"
+
+        self.framework = framework
+        self.master = master
+
+        self.driver = MesosSchedulerDriver(self, self.framework, self.master)
+        self._driver_thread = Thread(target=self.driver.run)
+        self._driver_thread.daemon = True
+        self._driver_thread.start()

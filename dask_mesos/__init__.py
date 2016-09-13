@@ -1,1 +1,1 @@
-from .core import DaskMesosDeployment, DaskMesosScheduler
+from .core import FixedScheduler
