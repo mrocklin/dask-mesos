@@ -33,13 +33,13 @@ class DaskMesosDeployment(object):
 
 
 class DaskMesosScheduler(Scheduler):
-    def __init__(self, target, scheduler, cpus=1, mem=4096, disk=2**16,
+    def __init__(self, target, scheduler, cpus=1, mem=4096, disk=None,
                  executable='dask-worker'):
         self.target = target
         self.scheduler = scheduler
         self.cpus = cpus
         self.mem = mem
-        self.disk = disk
+        self.disk = disk or mem * 10
         self.worker_executable = executable
         self.status_messages = deque(maxlen=10000)
         self.recent_offers = deque(maxlen=100)

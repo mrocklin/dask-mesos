@@ -10,7 +10,7 @@ from distributed.utils_test import gen_cluster
 
 @gen_cluster(client=True, ncores=[], timeout=None)
 def test_simple(c, s):
-    DM = DaskMesosDeployment(2, s, cpus=1, mem=256, disk=1000, executable='/opt/anaconda/bin/dask-worker')
+    DM = DaskMesosDeployment(2, s, cpus=1, mem=256, executable='/opt/anaconda/bin/dask-worker')
     DM.start()
 
     start = time()
