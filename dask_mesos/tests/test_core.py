@@ -1,4 +1,4 @@
-from dask_mesos import DaskMesosDeployment
+from dask_mesos import DaskMesosDeployment, DaskMesosScheduler
 
 from time import time
 
@@ -10,7 +10,9 @@ from distributed.utils_test import gen_cluster
 
 @gen_cluster(client=True, ncores=[], timeout=None)
 def test_simple(c, s):
-    DM = DaskMesosDeployment(2, s, cpus=1, mem=256, executable='/opt/anaconda/bin/dask-worker')
+    S = DaskMesosScheduler(scheduler=s, target=2, cpus=1, mem=256,
+                           executable='/opt/anaconda/bin/dask-worker')
+    DM = DaskMesosDeployment(S)
     DM.start()
 
     start = time()
@@ -18,7 +20,7 @@ def test_simple(c, s):
         yield gen.sleep(0.1)
         assert time() < start + 10
 
-    assert DM.scheduler.acknowledged == DM.scheduler.submitted
+    assert S.acknowledged == S.submitted
 
     yield gen.sleep(0.2)
     assert len(s.ncores) == 2  # still 2 after some time

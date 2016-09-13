@@ -15,25 +15,25 @@ logging.basicConfig(format='%(levelname)s - %(message)s',
 
 
 class DaskMesosDeployment(object):
-    def __init__(self, target, scheduler_address, **kwargs):
-        self.scheduler = DaskMesosScheduler(target, scheduler_address, **kwargs)
+    def __init__(self, scheduler):
+        self.scheduler = scheduler
         self.framework = mesos_pb2.FrameworkInfo()
         self.framework.user = ""
         self.framework.name = "dask-scheduler"
         self.driver = MesosSchedulerDriver(self.scheduler, self.framework,
                 "zk://localhost:2181/mesos")  # assumes running on the master
-        self._thread = None
+        self._driver_thread = None
 
     def start(self):
-        if self._thread:
+        if self._driver_thread:
             return
-        self._thread = Thread(target=self.driver.run)
-        self._thread.daemon = True
-        self._thread.start()
+        self._driver_thread = Thread(target=self.driver.run)
+        self._driver_thread.daemon = True
+        self._driver_thread.start()
 
 
 class DaskMesosScheduler(Scheduler):
-    def __init__(self, target, scheduler, cpus=1, mem=4096, disk=None,
+    def __init__(self, scheduler, target=0, cpus=1, mem=4096, disk=None,
                  executable='dask-worker'):
         self.target = target
         self.scheduler = scheduler
