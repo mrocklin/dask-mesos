@@ -147,11 +147,11 @@ class FixedScheduler(mesos.interface.Scheduler):
 
             if tasks:
                 driver.launchTasks(offer.id, tasks)
+                logger.info("Launch tasks %s with offer %s",
+                            [t.task_id.value for t in tasks], offer.id.value)
+                logger.debug("Launching tasks %s", tasks)
             else:
                 driver.declineOffer(offer.id)
-            logger.info("Launch tasks %s with offer %s",
-                        [t.task_id.value for t in tasks], offer.id.value)
-            logger.debug("Launching tasks %s", tasks)
 
     def task_info(self, offer):
         task = mesos_pb2.TaskInfo()
